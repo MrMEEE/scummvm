@@ -143,6 +143,7 @@ static const LingoV4Bytecode lingoV4[] = {
 	{ 0xa5, LC::c_stackdrop, 	"w" },
 	{ 0xa6, LC::cb_v4theentitynamepush, "wN" },
 	{ 0xa7, LC::cb_call,		"wN" }, // D5+ objcall
+	{ 0xae, LC::c_intpush,		"W" },
 	{ 0, nullptr, nullptr }
 };
 
@@ -884,13 +885,28 @@ void LC::cb_v4theentitynamepush() {
 void LC::cb_v4theentityassign() {
 	int bank = g_lingo->readInt();
 
-	int firstArg = g_lingo->pop().asInt();
+	if (g_lingo->_state->stack.empty()) {
+		warning("cb_v4theentityassign: insufficient stack values for mapping 0x%02x", bank);
+		return;
+	}
+
+	int firstArg = g_lingo->peek(0).asInt();
+	int key = (bank << 8) + firstArg;
+	uint requiredValues = 2;
+	if (g_lingo->_lingoV4TheEntity.contains(key) &&
+			g_lingo->_lingoV4TheEntity[key]->type == kTEAItemId)
+		requiredValues = 3;
+	if (g_lingo->_state->stack.size() < requiredValues) {
+		warning("cb_v4theentityassign: insufficient stack values for mapping 0x%02x 0x%02x", bank, firstArg);
+		return;
+	}
+
+	firstArg = g_lingo->pop().asInt();
 	Datum value = g_lingo->pop();
 	Datum result;
 	result.u.s = nullptr;
 	result.type = VOID;
 
-	int key = (bank << 8) + firstArg;
 	if (!g_lingo->_lingoV4TheEntity.contains(key)) {
 		warning("cb_v4theentityassign: unhandled mapping 0x%02x 0x%02x", bank, firstArg);
 
@@ -1365,6 +1381,8 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 		stream.readUint16();
 		stream.readUint16();
 		stream.readUint16();
+		if (version >= kFileVer850)
+			stream.readUint32(); // stack height
 
 		if (startOffset < codeStoreOffset) {
 			warning("Function %d start offset is out of bounds!", i);
@@ -1450,14 +1468,14 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 		Common::Array<uint32> jumpList;
 		Common::Array<uint32> byteOffsets;
 
-		// Size of an entry in the consts index.
-		int constEntrySize = 0;
-		if (version >= kFileVer500) {
-			// For D5 this is uint32 type + uint32 offset
-			constEntrySize = 8;
+		int operandMultiplier = 0;
+		if (version >= kFileVer850) {
+			// D8.5+ bytecode operands use direct table indexes.
+			operandMultiplier = 1;
+		} else if (version >= kFileVer500) {
+			operandMultiplier = 8;
 		} else {
-			// For D4 this is uint16 type + uint32 offset
-			constEntrySize = 6;
+			operandMultiplier = 6;
 		}
 
 		while (pointer < startOffset + length - codeStoreOffset) {
@@ -1479,10 +1497,10 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 				}
 				// The argument is a byte offset to an entry in the consts index.
 				// As such, it should be an exact multiple of the entry size.
-				if (arg % constEntrySize) {
-					warning("Opcode 0x%02x arg %d not a multiple of %d", opcode, arg, constEntrySize);
+				if (arg % operandMultiplier) {
+					warning("Opcode 0x%02x arg %d not a multiple of %d", opcode, arg, operandMultiplier);
 				}
-				arg /= constEntrySize;
+				arg /= operandMultiplier;
 				Datum constant = _assemblyContext->_constants[arg];
 				switch (constant.type) {
 				case INT:
@@ -1570,10 +1588,10 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 							break;
 						case 'p':
 							// argument is some kind of denormalised offset
-							if (arg % constEntrySize) {
-								warning("Argument %d was expected to be a multiple of %d", arg, constEntrySize);
+							if (arg % operandMultiplier) {
+								warning("Argument %d was expected to be a multiple of %d", arg, operandMultiplier);
 							}
-							arg /= constEntrySize;
+							arg /= operandMultiplier;
 							break;
 						case 'a':
 							// argument is a function argument ID

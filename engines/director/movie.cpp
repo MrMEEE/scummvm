@@ -35,6 +35,7 @@
 #include "director/score.h"
 #include "director/window.h"
 #include "director/castmember/castmember.h"
+#include "director/util.h"
 
 namespace Director {
 
@@ -698,6 +699,33 @@ int Movie::getCastLibIDByName(const Common::String &name) {
 	return -1;
 }
 
+int Movie::loadCastLibByName(const Common::String &name) {
+	int castLib = getCastLibIDByName(name);
+
+	Common::Path castPath = findPath(Common::String::format("Speak/%s.cxt", name.c_str()), false, false);
+	if (castPath.empty())
+		castPath = findPath(Common::String::format("Speak/%s.dxr", name.c_str()), false, false);
+	if (castPath.empty())
+		castPath = findMoviePath(Common::String::format("Speak/%s.cxt", name.c_str()));
+	if (castPath.empty())
+		castPath = findMoviePath(Common::String::format("Speak/%s.dxr", name.c_str()));
+	if (castPath.empty())
+		return -1;
+
+	if (castLib < 0) {
+		castLib = 1;
+		for (auto &it : _casts)
+			castLib = MAX(castLib, it._key + 1);
+	}
+
+	if (!loadCastLibFrom(castLib, castPath))
+		return castLib;
+
+	setCastLibName(name, castLib);
+	debugC(3, kDebugLoading, "Movie::loadCastLibByName: loaded '%s' as castLib %d", name.c_str(), castLib);
+	return castLib;
+}
+
 void Movie::setCastLibName(const Common::String &name, int castLib) {
 	if (!_casts.contains(castLib)) {
 		warning("Movie::setCastLibName: castLib %d not found", castLib);
@@ -746,6 +774,20 @@ CastMemberID Movie::getCastMemberIDByNameAndType(const Common::String &name, int
 		}
 	} else {
 		warning("Movie::getCastMemberIDByNameAndType: Unknown castLib %d", castLib);
+	}
+	if (result.member == -1 && castLib > 0) {
+		for (auto &castName : _castNames) {
+			if (castName._value == castLib) {
+				loadCastLibByName(castName._key);
+				Cast *cast = _casts.getValOrDefault(castLib, nullptr);
+				if (cast) {
+					CastMember *member = cast->getCastMemberByNameAndType(name, type);
+					if (member)
+						result = CastMemberID(member->getID(), castLib);
+				}
+				break;
+			}
+		}
 	}
 	// An embedded movie shares its host's cast, so a member it lacks may
 	// live in the host movie.

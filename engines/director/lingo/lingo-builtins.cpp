@@ -233,7 +233,7 @@ static const BuiltinProto builtins[] = {
 	{ "isPastCuePoint",LB::b_isPastCuePoint,2, 2, 600, FBLTIN },	// 					D6 f
 	{ "mci",	 		LB::b_mci,			1, 1, 300, CBLTIN },	//		D3.1 c
 	{ "mciwait",		LB::b_mciwait,		1, 1, 300, CBLTIN },	//		D3.1 c
-	{ "sound",			LB::b_sound,		2, 3, 300, CBLTIN },	//		D3 c
+	{ "sound",			LB::b_sound,		1, 3, 300, HBLTIN },	//		D3 c, D7 f
 	{ "soundBusy",		LB::b_soundBusy,	1, 1, 300, FBLTIN },	//		D3 f
 	// Constants
 	{ "backspace",		LB::b_backspace,	0, 0, 200, KBLTIN },	// D2 konstant
@@ -447,6 +447,83 @@ static const BuiltinProto builtins[] = {
 
 void Lingo::initBuiltIns() {
 	initBuiltIns(builtins);
+}
+
+namespace SoundChannelBuiltins {
+void m_isBusy(int nargs);
+void m_play(int nargs);
+void m_queue(int nargs);
+void m_stop(int nargs);
+}
+
+static const MethodProto soundChannelMethods[] = {
+	{ "isBusy", SoundChannelBuiltins::m_isBusy, 0, 0, 700 },
+	{ "play", SoundChannelBuiltins::m_play, 1, 1, 700 },
+	{ "queue", SoundChannelBuiltins::m_queue, 1, 1, 700 },
+	{ "stop", SoundChannelBuiltins::m_stop, 0, 0, 700 },
+	{ nullptr, nullptr, 0, 0, 0 }
+};
+
+class SoundChannelObject : public Object<SoundChannelObject> {
+public:
+	SoundChannelObject(int channel) : Object<SoundChannelObject>("sound"), _channel(channel) {
+		_objType = kNoneObj;
+		if (!_methods)
+			initMethods(soundChannelMethods);
+	}
+
+	int _channel;
+};
+
+static Datum getSoundMember(const Datum &value) {
+	if (value.type != PARRAY)
+		return value;
+
+	for (const auto &cell : value.u.parr->arr) {
+		if (cell.p.asString().equalsIgnoreCase("member"))
+			return cell.v;
+	}
+
+	return Datum();
+}
+
+static SoundChannelObject *getSoundChannelObject() {
+	return static_cast<SoundChannelObject *>(g_lingo->_state->me.u.obj);
+}
+
+void SoundChannelBuiltins::m_queue(int nargs) {
+	ARGNUMCHECK(1);
+	Datum member = getSoundMember(g_lingo->pop());
+	if (member.type == VOID)
+		return;
+
+	CastMember *castMember = g_director->getCurrentMovie()->getCastMember(member.asMemberID(kCastSound));
+	if (castMember)
+		castMember->load();
+}
+
+void SoundChannelBuiltins::m_play(int nargs) {
+	ARGNUMCHECK(1);
+	Datum member = getSoundMember(g_lingo->pop());
+	if (member.type == VOID)
+		return;
+
+	CastMemberID memberID = member.asMemberID(kCastSound);
+	if (memberID.member <= 0)
+		return;
+
+	g_director->getCurrentWindow()->getSoundManager()->playCastMember(
+		memberID, getSoundChannelObject()->_channel, true);
+}
+
+void SoundChannelBuiltins::m_stop(int nargs) {
+	ARGNUMCHECK(0);
+	g_director->getCurrentWindow()->getSoundManager()->stopSound(getSoundChannelObject()->_channel);
+}
+
+void SoundChannelBuiltins::m_isBusy(int nargs) {
+	ARGNUMCHECK(0);
+	g_lingo->push(g_director->getCurrentWindow()->getSoundManager()->isChannelActive(getSoundChannelObject()->_channel));
 }
 
 void Lingo::initBuiltIns(const BuiltinProto protos[]) {
@@ -1869,6 +1946,15 @@ void LB::b_xtra(int nargs) {
 			if (name.equalsIgnoreCase(g_lingo->_openXtras[i])) {
 				Datum var = g_lingo->_openXtraObjects[i];
 				g_lingo->push(var);
+				return;
+			}
+		}
+
+		uint openXtraCount = g_lingo->_openXtraObjects.size();
+		if (g_lingo->_xlibOpeners.contains(name)) {
+			g_lingo->openXLib(name, kXtraObj, Common::Path());
+			if (g_lingo->_openXtraObjects.size() > openXtraCount) {
+				g_lingo->push(g_lingo->_openXtraObjects.back());
 				return;
 			}
 		}
@@ -4001,6 +4087,12 @@ void LB::b_mciwait(int nargs) {
 }
 
 void LB::b_sound(int nargs) {
+	if (nargs == 1 && g_director->getVersion() >= 700) {
+		int channel = g_lingo->pop().asInt();
+		g_lingo->push(new SoundChannelObject(channel));
+		return;
+	}
+
 	// Builtin function for sound as used by the Director bytecode engine.
 	//
 	// Accepted arguments:
@@ -4011,7 +4103,7 @@ void LB::b_sound(int nargs) {
 	// "stop", INT soundChannel
 
 	if (nargs < 2 || nargs > 3) {
-		warning("b_sound: expected 2 or 3 args, not %d", nargs);
+		warning("b_sound: expected 1 to 3 args, not %d", nargs);
 		g_lingo->dropStack(nargs);
 
 		return;

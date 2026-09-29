@@ -107,6 +107,8 @@ bool DirectorEngine::processSysEvents(bool captureClick, bool skipWindowManager)
 		case Common::EVENT_KEYDOWN:
 			if (captureClick)
 				return true;
+			if (event.type == Common::EVENT_LBUTTONDOWN || event.type == Common::EVENT_RBUTTONDOWN)
+				return false;
 			break;
 		default:
 			break;

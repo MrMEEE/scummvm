@@ -1994,6 +1994,8 @@ CastMemberID Lingo::resolveCastMember(const Datum &memberID, const Datum &castLi
 	switch (castLib.type) {
 	case STRING:
 		libID = movie->getCastLibIDByName(castLib.asString());
+		if (libID < 0)
+			libID = movie->loadCastLibByName(castLib.asString());
 		break;
 	case INT:
 	case FLOAT:

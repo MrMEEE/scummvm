@@ -941,7 +941,10 @@ void Cast::loadCast() {
 	if (_version >= kFileVer400 && !debugChannelSet(-1, kDebugNoBytecode)) {
 		// Try to load script context
 		// Even for multiple casts, ID is 1024
-		if ((r = _castArchive->getFirstResource(MKTAG('L', 'c', 't', 'x'), libResourceId)) != nullptr) {
+		r = _castArchive->getFirstResource(MKTAG('L', 'c', 't', 'X'), libResourceId);
+		if (!r)
+			r = _castArchive->getFirstResource(MKTAG('L', 'c', 't', 'x'), libResourceId);
+		if (r) {
 			loadLingoContext(*r);
 			delete r;
 		}
@@ -2227,11 +2230,9 @@ void Cast::loadCastInfo(Common::SeekableReadStreamEndian &stream, uint16 id) {
 		}
 	}
 
-	// Looping = play-once bit (flags & 16) cleared; verified on D7 only
-	if (_version >= kFileVer400 && _version < kFileVer800 && member->_type == kCastSound) {
+	// Looping = play-once bit (flags & 16) cleared
+	if (_version >= kFileVer400 && member->_type == kCastSound) {
 		((SoundCastMember *)member)->_looping = castInfo.flags & 16 ? 0 : 1;
-	} else if (_version >= kFileVer800 && member->_type == kCastSound) {
-		warning("STUB: Cast::loadCastInfo(): Sound cast member info not yet supported for version v%d (%d)", humanVersion(_version), _version);
 	}
 
 	// For PaletteCastMember, run load() as we need it right now

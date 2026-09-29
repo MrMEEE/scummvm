@@ -20,12 +20,15 @@
  */
 
 #include "common/system.h"
+#include "common/macresman.h"
+#include "common/savefile.h"
 
 #include "director/director.h"
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-object.h"
 #include "director/lingo/lingo-utils.h"
 #include "director/lingo/xlibs/p/printomatic.h"
+#include "director/util.h"
 
 /**************************************************
  *
@@ -196,9 +199,11 @@ namespace Director {
 const char *PrintOMaticXObj::xlibName = "PrintOMatic";
 const XlibFileDesc PrintOMaticXObj::fileNames[] = {
 	{ "PrintOMatic",   nullptr },
-	{ "PMATIC",   nullptr },
-	{ "POMLITE",   nullptr },
-	{ nullptr,        nullptr },
+	{ "Printomatic",   nullptr },
+	{ "Pmatic",        nullptr },
+	{ "PMATIC",        nullptr },
+	{ "POMLITE",       nullptr },
+	{ nullptr,         nullptr },
 };
 
 static MethodProto xlibMethods[] = {
@@ -226,9 +231,9 @@ static MethodProto xlibMethods[] = {
 	{ "textBox",				PrintOMaticXObj::m_textBox,		 5, 5,	400 },
 	{ "setText",				PrintOMaticXObj::m_setText,		 0, 0,	400 },
 	{ "appendText",				PrintOMaticXObj::m_appendText,		 0, 0,	400 },
-	{ "appendTextFile",				PrintOMaticXObj::m_appendTextFile,		 0, 0,	400 },
+	{ "appendTextFile",				PrintOMaticXObj::m_appendTextFile,		 1, 2,	400 },
 	{ "append",				PrintOMaticXObj::m_appendText,		 0, 0,	500 },
-	{ "appendFile",				PrintOMaticXObj::m_appendTextFile,		 0, 0,	500 },
+	{ "appendFile",				PrintOMaticXObj::m_appendTextFile,		 1, 2,	500 },
 	{ "appendTextResource",				PrintOMaticXObj::m_appendTextResource,		 0, 0,	400 },
 	{ "newFrame",				PrintOMaticXObj::m_newFrame,		 2, 2,	500 },
 	{ "drawRect",				PrintOMaticXObj::m_drawRect,		 2, 2,	500 },
@@ -318,7 +323,11 @@ void PrintOMaticXObj::m_new(int nargs) {
 }
 
 XOBJSTUBNR(PrintOMaticXObj::m_dispose)
-XOBJSTUBNR(PrintOMaticXObj::m_reset)
+void PrintOMaticXObj::m_reset(int nargs) {
+	PrintOMaticXObject *me = static_cast<PrintOMaticXObject *>(g_lingo->_state->me.u.obj);
+	me->_appendedFile.clear();
+	g_lingo->printSTUBWithArglist("PrintOMaticXObj::m_reset", nargs);
+}
 XOBJSTUB(PrintOMaticXObj::m_newPage, 0)
 XOBJSTUBNR(PrintOMaticXObj::m_setPage)
 XOBJSTUB(PrintOMaticXObj::m_setMargins, 0)
@@ -339,7 +348,16 @@ XOBJSTUBNR(PrintOMaticXObj::m_setTextLineSpacing)
 XOBJSTUBNR(PrintOMaticXObj::m_textBox)
 XOBJSTUB(PrintOMaticXObj::m_setText, 0)
 XOBJSTUB(PrintOMaticXObj::m_appendText, 0)
-XOBJSTUB(PrintOMaticXObj::m_appendTextFile, 0)
+void PrintOMaticXObj::m_appendTextFile(int nargs) {
+	if (nargs < 1) {
+		warning("PrintOMaticXObj::m_appendTextFile: missing file name");
+		return;
+	}
+	if (nargs > 1)
+		g_lingo->pop();
+	PrintOMaticXObject *me = static_cast<PrintOMaticXObject *>(g_lingo->_state->me.u.obj);
+	me->_appendedFile = g_lingo->pop().asString();
+}
 XOBJSTUB(PrintOMaticXObj::m_appendTextResource, 0)
 XOBJSTUB(PrintOMaticXObj::m_newFrame, 0)
 XOBJSTUBNR(PrintOMaticXObj::m_drawRect)
@@ -376,7 +394,38 @@ XOBJSTUB(PrintOMaticXObj::m_setProgressPict, 0)
 XOBJSTUBNR(PrintOMaticXObj::m_setProgressLoc)
 XOBJSTUB(PrintOMaticXObj::m_printPreview, 0)
 XOBJSTUB(PrintOMaticXObj::m_printPicts, 0)
-XOBJSTUBNR(PrintOMaticXObj::m_print)
+void PrintOMaticXObj::m_print(int nargs) {
+	PrintOMaticXObject *me = static_cast<PrintOMaticXObject *>(g_lingo->_state->me.u.obj);
+	if (me->_appendedFile.empty()) {
+		warning("PrintOMaticXObj::m_print: no appended file");
+		return;
+	}
+
+	Common::SeekableReadStream *input = Common::MacResManager::openFileOrDataFork(findPath(me->_appendedFile));
+	if (!input) {
+		warning("PrintOMaticXObj::m_print: unable to open '%s'", me->_appendedFile.c_str());
+		return;
+	}
+
+	Common::OutSaveFile *output = g_system->getSavefileManager()->openForSaving("PrintOMatic-printout.bmp", false);
+	if (!output) {
+		warning("PrintOMaticXObj::m_print: unable to create printout");
+		delete input;
+		return;
+	}
+
+	byte buffer[4096];
+	while (!input->eos() && !input->err()) {
+		uint32 bytesRead = input->read(buffer, sizeof(buffer));
+		if (!bytesRead)
+			break;
+		output->write(buffer, bytesRead);
+	}
+	output->finalize();
+	delete output;
+	delete input;
+	debugC(1, kDebugXObj, "PrintOMaticXObj::m_print: saved '%s' as PrintOMatic-printout.bmp", me->_appendedFile.c_str());
+}
 XOBJSTUB(PrintOMaticXObj::m_savePageSetup, 0)
 XOBJSTUB(PrintOMaticXObj::m_getPageSetup, 0)
 XOBJSTUBNR(PrintOMaticXObj::m_hideMessages)

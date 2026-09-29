@@ -30,6 +30,8 @@ public:
 
 	bool hasProp(const Common::String &propName) override;
 	Datum getProp(const Common::String &propName) override;
+
+	Common::String _appendedFile;
 };
 
 namespace PrintOMaticXObj {

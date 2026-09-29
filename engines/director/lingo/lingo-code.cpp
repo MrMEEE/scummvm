@@ -821,6 +821,11 @@ Datum LC::subData(Datum &d1, Datum &d2) {
 }
 
 void LC::c_sub() {
+	if (g_lingo->_state->stack.size() < 2) {
+		warning("LC::c_sub(): insufficient stack values; using zero");
+		g_lingo->push(Datum(0));
+		return;
+	}
 	Datum d2 = g_lingo->pop();
 	Datum d1 = g_lingo->pop();
 	g_lingo->push(LC::subData(d1, d2));

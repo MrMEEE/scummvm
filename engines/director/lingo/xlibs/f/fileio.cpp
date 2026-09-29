@@ -142,6 +142,7 @@ namespace Director {
 const char *const FileIO::xlibName = "FileIO";
 const XlibFileDesc FileIO::fileNames[] = {
 	{ "FileIO",		nullptr },
+	{ "CheckCD",	nullptr },
 	{ "shFILEIO",	nullptr }, // TD loads this up using openXLib("@:shFILEIO.DLL")
 	{ "FILE",		nullptr },
 	{ "FILEIO16",	nullptr },

@@ -755,8 +755,15 @@ uint8 DirectorSound::getChannelFaderR(int channel) {
 }
 
 void DirectorSound::processCuePoints() {
+	if (!_window || !_window->getCurrentMovie())
+		return;
+
 	for (auto &it : _channels) {
 		SoundChannel *channel = it._value;
+		if (!channel)
+			continue;
+		if (channel->fromLastMovie)
+			continue;
 
 		const SoundID &lastPlayedSound = channel->lastPlayedSound;
 		if (lastPlayedSound.type == kSoundCast) {
@@ -782,7 +789,10 @@ void DirectorSound::processCuePoints() {
 
 				debugC(5, kDebugSound, "DirectorSound::processCuePoints(): cue point %d reached on channel %d", cuePoint, it._key);
 
-				_window->getCurrentMovie()->processEvent(kEventCuePassed, i);
+				Movie *movie = _window->getCurrentMovie();
+				if (!movie)
+					return;
+				movie->processEvent(kEventCuePassed, i);
 
 				channel->lastCuePointIndex = i;
 			}
