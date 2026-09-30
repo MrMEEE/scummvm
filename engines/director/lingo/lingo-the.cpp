@@ -2072,6 +2072,7 @@ void Lingo::setTheSprite(Datum &id1, int field, Datum &d) {
 	case kThePuppet:
 		if (!d.asInt() && sprite->_puppet && score->_currentFrame &&
 				id < (int)score->_currentFrame->_sprites.size()) {
+			sprite->_puppet = false;
 			channel->replaceSprite(score->_currentFrame->_sprites[id]);
 			channel->setDirty();
 		} else {
