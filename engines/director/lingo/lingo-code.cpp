@@ -1341,6 +1341,11 @@ void LC::c_wordToOf() {
 }
 
 void LC::c_and() {
+	if (g_lingo->_state->stack.size() < 2) {
+		warning("LC::c_and(): insufficient stack values; using false");
+		g_lingo->push(Datum(0));
+		return;
+	}
 	Datum d2 = g_lingo->pop();
 	Datum d1 = g_lingo->pop();
 
@@ -1350,6 +1355,11 @@ void LC::c_and() {
 }
 
 void LC::c_or() {
+	if (g_lingo->_state->stack.size() < 2) {
+		warning("LC::c_or(): insufficient stack values; using false");
+		g_lingo->push(Datum(0));
+		return;
+	}
 	Datum d2 = g_lingo->pop();
 	Datum d1 = g_lingo->pop();
 

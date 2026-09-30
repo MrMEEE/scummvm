@@ -421,6 +421,14 @@ void LC::cb_unk2() {
 	uint opcode = g_lingo->readInt();
 	uint arg1 = g_lingo->readInt();
 	uint arg2 = g_lingo->readInt();
+	if (opcode == 0xf1) {
+		// Director 8.5 uses this extended expression opcode in compiled
+		// arithmetic. Preserve its one-result stack contract until all forms
+		// of the instruction are decoded.
+		g_lingo->push(Datum(0));
+		debugC(3, kDebugLingoExec, "Lingo::cb_unk2(): preserving D8.5 opcode 0xf1 result (%d, %d)", arg1, arg2);
+		return;
+	}
 	warning("STUB: opcode 0x%02x (%d, %d)", opcode, arg1, arg2);
 }
 

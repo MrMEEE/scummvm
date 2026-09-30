@@ -908,7 +908,7 @@ void LB::b_value(int nargs) {
 	Common::String expr = d.asString();
 	expr.trim();
 	if (expr.empty()) {
-		g_lingo->push(Datum(0));
+		g_lingo->pushVoid();
 		return;
 	}
 

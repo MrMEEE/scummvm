@@ -73,6 +73,9 @@ Channel::Channel(Score *sc, Sprite *sp, int priority) {
 		_startFrame = -1;
 		_endFrame = -1;
 	}
+	_autoPuppetStartFrame = -1;
+	_autoPuppetEndFrame = -1;
+	_autoPuppetCastId = CastMemberID();
 }
 
 Channel::Channel(const Channel &channel) {
@@ -102,6 +105,9 @@ Channel& Channel::operator=(const Channel &channel) {
 
 	_startFrame = channel._startFrame;
 	_endFrame = channel._endFrame;
+	_autoPuppetStartFrame = channel._autoPuppetStartFrame;
+	_autoPuppetEndFrame = channel._autoPuppetEndFrame;
+	_autoPuppetCastId = channel._autoPuppetCastId;
 
 	return *this;
 }
@@ -298,6 +304,12 @@ bool Channel::isDirty(Sprite *nextSprite) {
 	// cast of the sprite changes.
 	if (!nextSprite)
 		return false;
+	if (_sprite->getAutoPuppet(kAPCast) &&
+			_autoPuppetStartFrame >= 0 &&
+			((_autoPuppetStartFrame == _autoPuppetEndFrame && _score->getCurrentFrameNum() == (uint)_autoPuppetStartFrame) ||
+			 _score->getCurrentFrameNum() < (uint)_autoPuppetStartFrame ||
+			 (_autoPuppetEndFrame >= 0 && _score->getCurrentFrameNum() > (uint)_autoPuppetEndFrame)))
+		return true;
 
 	bool isDirtyFlag = _widgetDirty ||
 		(_sprite->_cast && _sprite->_cast->isModified());
@@ -483,6 +495,8 @@ void Channel::setCast(CastMemberID memberID) {
 	// dimensions. In puppet mode Lingo can first change the
 	// dimensions of the sprite, -then- change the cast ID, and expect
 	// those custom dimensions to stick around.
+	if (!_sprite->getAutoPuppet(kAPCast))
+		_autoPuppetCastId = _sprite->_castId;
 	_sprite->setCast(memberID, !_sprite->_stretch);
 
 	// If the new cast member is a film loop, adjust _startPoint so the sprite
@@ -509,6 +523,8 @@ void Channel::setCast(CastMemberID memberID) {
 			_filmLoopFrame = 1;
 		}
 	}
+	_autoPuppetStartFrame = _sprite->_spriteInfo.startFrame;
+	_autoPuppetEndFrame = _sprite->_spriteInfo.endFrame;
 
 	replaceWidget();
 
@@ -534,6 +550,16 @@ void Channel::setClean(Sprite *nextSprite, bool partial) {
 	bool spriteTypeChanged = _sprite->_spriteType != nextSprite->_spriteType;
 
 	if (nextSprite) {
+		if (_sprite->getAutoPuppet(kAPCast) && _autoPuppetStartFrame >= 0 &&
+				((_autoPuppetStartFrame == _autoPuppetEndFrame && _score->getCurrentFrameNum() == (uint)_autoPuppetStartFrame) ||
+				 _score->getCurrentFrameNum() < (uint)_autoPuppetStartFrame ||
+				 (_autoPuppetEndFrame >= 0 && _score->getCurrentFrameNum() > (uint)_autoPuppetEndFrame))) {
+			_sprite->_autoPuppet = kAPNone;
+			_sprite->setCast(_autoPuppetCastId, !_sprite->_stretch);
+			replaceWidget();
+			_widgetDirty = true;
+			return;
+		}
 		// for the non-puppet QDShape, since we won't use isDirty to check whether the QDShape is changed.
 		// so we may always keep the sprite info because we need it to draw QDShape.
 		if (_sprite->_puppet || _sprite->_autoPuppet || (!nextSprite->isQDShape() && partial)) {

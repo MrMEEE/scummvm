@@ -132,6 +132,9 @@ public:
 
 	int _startFrame;
 	int _endFrame;
+	int _autoPuppetStartFrame;
+	int _autoPuppetEndFrame;
+	CastMemberID _autoPuppetCastId;
 	Common::Array<Datum> _scriptInstanceList;
 
 private:
